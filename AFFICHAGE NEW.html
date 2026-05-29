@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Scoreboard</title>
+
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        color: white;
+        font-family: Arial, sans-serif;
+    }
+
+    #mainBanner {
+        background: black;
+        padding: 10px 20px;
+        display: inline-block;
+        border-radius: 10px;
+    }
+
+    #line1 {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 35px;
+        font-size: 48px;
+        font-weight: bold;
+        white-space: nowrap;
+    }
+
+    .teamLogo {
+        height: 95px;
+    }
+
+    .airLogo {
+        height: 80px;
+        margin-right: 20px;
+        filter: drop-shadow(0 0 6px black);
+    }
+
+    #secondLine {
+        width: 100%;
+        background: black;
+        color: white;
+        font-size: 50px;
+        font-weight: bold;
+        padding: 5px 20px;
+        display: flex;
+        align-items: center;
+        gap: 40px;
+        white-space: nowrap;
+    }
+
+    #butBanner {
+        margin-top: 20px;
+        padding: 20px 40px;
+        border-radius: 15px;
+        display: none;
+        align-items: center;
+        gap: 40px;
+        font-size: 70px;
+        font-weight: bold;
+        color: white;
+        white-space: nowrap;
+    }
+
+    .butLogo {
+        height: 90px;
+    }
+</style>
+</head>
+
+<body>
+
+<div id="mainBanner">
+
+    <div id="line1">
+        <img id="air06Logo" class="airLogo">
+
+        <img id="logoA" src="ogcn.png" class="teamLogo">
+        <span id="teamAName">OGC NICE</span>
+
+        <span id="scoreA">00</span>
+
+        <span id="chronoDisplay">00:00</span>
+
+        <span id="scoreB">00</span>
+
+        <span id="teamBName">AS ST ETIENNE</span>
+        <img id="logoB" src="asse.png" class="teamLogo">
+    </div>
+
+    <div id="secondLine">
+        <span id="extraTimeDisplay" style="color:#FF0000;"></span>
+        <span id="extraChronoDisplay" style="color:#FFFFFF;"></span>
+        <span id="varInline" style="color:#00A2FF; display:none;">VAR EN COURS</span>
+    </div>
+
+</div>
+
+<!-- BANDEAU BUT SOUS LE BANDEAU -->
+<div id="butBanner">
+    <img id="butLogoLeft" class="butLogo">
+    <span>BUT</span>
+    <img id="butLogoRight" class="butLogo">
+</div>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+import { getStorage, ref as sRef, getDownloadURL } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyCxRpkhpoN8DU5uX-nVvVFGqjJJWaIaxww",
+    authDomain: "scoring-22ac0.firebaseapp.com",
+    databaseURL: "https://scoring-22ac0-default-rtdb.firebaseio.com",
+    projectId: "scoring-22ac0",
+    storageBucket: "scoring-22ac0.firebasestorage.app",
+    messagingSenderId: "488238295342",
+    appId: "1:488238295342:web:cb408c850ed1f69453b2bf",
+    measurementId: "G-MP9N3P8EMZ"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const storage = getStorage();
+
+/* LOGO AIR06 */
+getDownloadURL(sRef(storage, "air06.png"))
+    .then((url) => {
+        document.getElementById("air06Logo").src = url;
+    });
+
+/* SCORE + BANDEAU BUT */
+let lastScoreA = 0;
+let lastScoreB = 0;
+
+onValue(ref(db, "SCOREBOARD"), (snapshot) => {
+    const d = snapshot.val();
+    if (!d) return;
+
+    const scoreA = d.scoreA;
+    const scoreB = d.scoreB;
+
+    document.getElementById("scoreA").textContent = scoreA.toString().padStart(2, "0");
+    document.getElementById("scoreB").textContent = scoreB.toString().padStart(2, "0");
+
+    if (scoreA > lastScoreA) showButBanner("A");
+    if (scoreB > lastScoreB) showButBanner("B");
+
+    lastScoreA = scoreA;
+    lastScoreB = scoreB;
+});
+
+function showButBanner(team) {
+    const banner = document.getElementById("butBanner");
+
+    const logoA = document.getElementById("logoA").src;
+    const logoB = document.getElementById("logoB").src;
+
+    document.getElementById("butLogoLeft").src = team === "A" ? logoA : logoB;
+    document.getElementById("butLogoRight").src = team === "A" ? logoA : logoB;
+
+    banner.style.background = team === "A" ? "#CC0000" : "#008000";
+
+    banner.style.display = "flex";
+
+    setTimeout(() => {
+        banner.style.display = "none";
+    }, 4000);
+}
+
+/* CHRONO PRINCIPAL */
+onValue(ref(db, "CHRONO"), (snapshot) => {
+    const c = snapshot.val();
+    if (!c) return;
+
+    const minutes = Math.floor(c.time / 60).toString().padStart(2, "0");
+    const seconds = (c.time % 60).toString().padStart(2, "0");
+
+    document.getElementById("chronoDisplay").textContent = `${minutes}:${seconds}`;
+});
+
+/* TEMPS ADDITIONNEL */
+let extraInterval = null;
+
+onValue(ref(db, "CHRONO_EXTRA"), (snapshot) => {
+    const e = snapshot.val();
+
+    if (!e) {
+        clearInterval(extraInterval);
+        extraInterval = null;
+        document.getElementById("extraTimeDisplay").textContent = "";
+        document.getElementById("extraChronoDisplay").textContent = "";
+        return;
+    }
+
+    const mTotal = e.extraTime.toString().padStart(2, "0");
+    document.getElementById("extraTimeDisplay").textContent = `+${mTotal}:00`;
+
+    clearInterval(extraInterval);
+    extraInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - e.start) / 1000);
+        const m = Math.floor(elapsed / 60).toString().padStart(2, "0");
+        const s = (elapsed % 60).toString().padStart(2, "0");
+        document.getElementById("extraChronoDisplay").textContent = `${m}:${s}`;
+    }, 1000);
+});
+
+/* VAR */
+onValue(ref(db, "VAR"), (snapshot) => {
+    const v = snapshot.val();
+    document.getElementById("varInline").style.display =
+        v && v.active ? "inline-block" : "none";
+});
+
+</script>
+
+</body>
+</html>
